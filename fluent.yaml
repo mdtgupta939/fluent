@@ -1,0 +1,74 @@
+<filter **nginx-ingress**>
+  @type record_modifier
+  whitelist_keys log
+</filter>
+<filter **nginx-ingress**>
+  @type record_modifier
+  <replace>
+    # your key name
+    key log
+    # your regexp
+    expression /password.+?":.+?".+?"/
+    # replace string
+    replace password\\":\\"****\\"
+  </replace>
+</filter>
+<filter **nginx-ingress**>
+  @type parser
+  key_name log
+  format json
+  reserve_time true
+  reserve_data true
+  emit_invalid_record_to_error false
+</filter>
+<match **nginx-ingress**>
+  @type copy
+  <store>
+      @type elasticsearch
+      @id out_gateway_es
+      @log_level info
+      include_tag_key false
+      host "#{ENV['FLUENT_ELASTICSEARCH_HOST']}"
+      port "#{ENV['FLUENT_ELASTICSEARCH_PORT']}"
+      path "#{ENV['FLUENT_ELASTICSEARCH_PATH']}"
+      scheme "#{ENV['FLUENT_ELASTICSEARCH_SCHEME'] || 'http'}"
+      ssl_verify "#{ENV['FLUENT_ELASTICSEARCH_SSL_VERIFY'] || 'true'}"
+      ssl_version "#{ENV['FLUENT_ELASTICSEARCH_SSL_VERSION'] || 'TLSv1_2'}"
+      user "#{ENV['FLUENT_ELASTICSEARCH_USER'] || use_default}"
+      password "#{ENV['FLUENT_ELASTICSEARCH_PASSWORD'] || use_default}"
+      reload_connections "#{ENV['FLUENT_ELASTICSEARCH_RELOAD_CONNECTIONS'] || 'false'}"
+      reconnect_on_error "#{ENV['FLUENT_ELASTICSEARCH_RECONNECT_ON_ERROR'] || 'true'}"
+      reload_on_failure "#{ENV['FLUENT_ELASTICSEARCH_RELOAD_ON_FAILURE'] || 'true'}"
+      log_es_400_reason "#{ENV['FLUENT_ELASTICSEARCH_LOG_ES_400_REASON'] || 'false'}"
+      logstash_prefix gateway
+      index_name gateway
+      logstash_format true
+      include_timestamp false
+      type_name fluentd
+      template_file /host/gateway_index_template.json
+      template_name gateway-index-tmpl
+      
+      sniffer_class_name "#{ENV['FLUENT_SNIFFER_CLASS_NAME'] || 'Fluent::Plugin::ElasticsearchSimpleSniffer'}"
+      request_timeout "#{ENV['FLUENT_ELASTICSEARCH_REQUEST_TIMEOUT'] || '5s'}"
+      <buffer>
+        flush_thread_count "#{ENV['FLUENT_ELASTICSEARCH_BUFFER_FLUSH_THREAD_COUNT'] || '8'}"
+        flush_interval "#{ENV['FLUENT_ELASTICSEARCH_BUFFER_FLUSH_INTERVAL'] || '5s'}"
+        chunk_limit_size "#{ENV['FLUENT_ELASTICSEARCH_BUFFER_CHUNK_LIMIT_SIZE'] || '2M'}"
+        queue_limit_length "#{ENV['FLUENT_ELASTICSEARCH_BUFFER_QUEUE_LIMIT_LENGTH'] || '32'}"
+        retry_max_interval "#{ENV['FLUENT_ELASTICSEARCH_BUFFER_RETRY_MAX_INTERVAL'] || '30'}"
+        retry_forever true
+      </buffer>
+    </store>
+  <store>
+    @type mongo
+    @log_level info
+    include_tag_key true
+    database lil-logging
+    collection gateway
+    host logging-mongo-mongodb.lil-logging
+    port 27017
+    user 'writer'
+    password 'password'
+    include_time_key true
+  </store>
+</match>
